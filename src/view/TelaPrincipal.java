@@ -1,261 +1,513 @@
 package view;
 
-import model.*;
-import persistence.GerenciadorArquivo;
-
-import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import java.awt.*;
-import java.io.File;
+import controller.PlanejamentoController;
+import controller.PlanejamentoController.ResultadoCarga;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.io.IOException;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import javax.swing.BorderFactory;
+import javax.swing.ButtonGroup;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JRadioButton;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.table.DefaultTableModel;
+import model.Despesa;
+import model.Participante;
+import persistence.GerenciadorArquivo;
 
-/**
- * Classe de Visão (View) e Controlo (Controller) da interface gráfica.
- * Implementada em Java Swing com arquitetura MVC e design modernizado via Look and Feel.
- */
 public class TelaPrincipal extends JFrame {
-    private Planejamento planejamento;
-    private final String CAMINHO_ARQUIVO = "dados_planejamento.dat";
+
+    private static final String CAMINHO_ARQUIVO = "dados_planejamento.dat";
+    private static final Locale LOCALE_PT_BR = new Locale("pt", "BR");
+
+    private final PlanejamentoController controller;
+    private final NumberFormat moedaBR = NumberFormat.getCurrencyInstance(LOCALE_PT_BR);
 
     private JTabbedPane tabbedPane;
+
+    // Aba Participantes
+    private JTextField txtCodigo;
+    private JTextField txtNome;
+    private JTextField txtOrcamento;
+    private DefaultTableModel modeloParticipantes;
     private JTable tabelaParticipantes;
-    private DefaultTableModel modeloTabelaParticipantes;
+
+    // Aba Despesas
+    private JTextField txtDescricao;
+    private JTextField txtValor;
+    private JRadioButton rbFixa;
+    private JRadioButton rbPorPessoa;
+    private JPanel painelCheckboxes;
+    private List<JCheckBox> checkBoxesParticipantes;
+    private DefaultTableModel modeloDespesas;
     private JTable tabelaDespesas;
-    private DefaultTableModel modeloTabelaDespesas;
+
+    // Aba Resumo e Totais
+    private DefaultTableModel modeloTotais;
     private JTable tabelaTotais;
-    private DefaultTableModel modeloTabelaTotais;
+    private JLabel lblCustoTotal;
+    private JLabel lblStatusArquivo;
 
     public TelaPrincipal() {
-        planejamento = new Planejamento();
-        carregarDadosAutomaticamente();
+        super("SplitCore — Planejador de Despesas Compartilhadas");
+        this.controller = new PlanejamentoController(new GerenciadorArquivo(), CAMINHO_ARQUIVO);
+        this.checkBoxesParticipantes = new ArrayList<>();
 
-        // Título alinhado com a identidade do projeto académico (ADS / Unifor)
-        setTitle("SplitCore: Sistema Inteligente de Despesas Compartilhadas — ADS/Unifor");
-        setSize(850, 600);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null);
-
-        // Configuração dos separadores (Abas) da aplicação
-        tabbedPane = new JTabbedPane();
-        tabbedPane.addTab("Participantes", criarPainelParticipantes());
-        tabbedPane.addTab("Despesas", criarPainelDespesas());
-        tabbedPane.addTab("Resumo e Totais", criarPainelTotais());
-
-        add(tabbedPane);
+        configurarJanela();
+        inicializarComponentes();
+        carregarDadosIniciais();
         atualizarTodasTabelas();
     }
 
-    private void carregarDadosAutomaticamente() {
-        File f = new File(CAMINHO_ARQUIVO);
-        if (f.exists()) {
-            try {
-                planejamento = GerenciadorArquivo.carregar(CAMINHO_ARQUIVO);
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(this, "Aviso: Não foi possível recuperar os dados anteriores. Iniciando novo planejamento.", "Recuperação", JOptionPane.WARNING_MESSAGE);
-            }
-        }
+    private void configurarJanela() {
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(920, 620);
+        setLocationRelativeTo(null);
+        setLayout(new BorderLayout(8, 8));
     }
 
-    private void salvarDadosAutomaticamente() {
-        try {
-            GerenciadorArquivo.salvar(CAMINHO_ARQUIVO, planejamento);
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Erro crítico ao gravar dados no arquivo: " + e.getMessage(), "Erro de Persistência", JOptionPane.ERROR_MESSAGE);
-        }
+    private void inicializarComponentes() {
+        tabbedPane = new JTabbedPane();
+        tabbedPane.addTab("Participantes", criarPainelParticipantes());
+        tabbedPane.addTab("Despesas", criarPainelDespesas());
+        tabbedPane.addTab("Resumo e Totais", criarPainelResumo());
+
+        add(tabbedPane, BorderLayout.CENTER);
+        add(criarBarraInferior(), BorderLayout.SOUTH);
     }
 
     private JPanel criarPainelParticipantes() {
-        JPanel painel = new JPanel(new BorderLayout());
+        JPanel painel = new JPanel(new BorderLayout(8, 8));
+        painel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        modeloTabelaParticipantes = new DefaultTableModel(new String[]{"Código", "Nome do Participante", "Orçamento Disponível (R$)"}, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) { return false; }
-        };
-        tabelaParticipantes = new JTable(modeloTabelaParticipantes);
-        painel.add(new JScrollPane(tabelaParticipantes), BorderLayout.CENTER);
+        JPanel form = new JPanel(new GridLayout(2, 4, 8, 8));
+        form.setBorder(BorderFactory.createTitledBorder("Cadastro / Edição de Participante"));
 
-        JPanel painelBotoes = new JPanel();
-        JButton btnAdicionar = new JButton("Adicionar Participante");
+        txtCodigo = new JTextField();
+        txtNome = new JTextField();
+        txtOrcamento = new JTextField();
+
+        JButton btnAdicionar = new JButton("Adicionar");
+        JButton btnEditar = new JButton("Salvar Edição");
         JButton btnRemover = new JButton("Remover Selecionado");
+        JButton btnLimpar = new JButton("Limpar Campos");
 
-        painelBotoes.add(btnAdicionar);
-        painelBotoes.add(btnRemover);
-        painel.add(painelBotoes, BorderLayout.SOUTH);
+        form.add(new JLabel("Código:"));
+        form.add(new JLabel("Nome:"));
+        form.add(new JLabel("Orçamento (R$):"));
+        form.add(new JLabel(""));
 
-        btnAdicionar.addActionListener(e -> {
-            String codigo = JOptionPane.showInputDialog(this, "Informe o código único do participante:");
-            if (codigo == null || codigo.trim().isEmpty()) return;
-            String nome = JOptionPane.showInputDialog(this, "Informe o nome do participante:");
-            if (nome == null || nome.trim().isEmpty()) return;
-            String strOrcamento = JOptionPane.showInputDialog(this, "Informe o orçamento disponível (R$):");
-            if (strOrcamento == null) return;
+        form.add(txtCodigo);
+        form.add(txtNome);
+        form.add(txtOrcamento);
 
-            try {
-                double orcamento = Double.parseDouble(strOrcamento.replace(",", "."));
-                Participante p = new Participante(codigo, nome, orcamento);
-                planejamento.adicionarParticipante(p);
-                salvarDadosAutomaticamente();
-                atualizarTodasTabelas();
-                JOptionPane.showMessageDialog(this, "Participante cadastrado com sucesso!");
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Erro nos dados informados: " + ex.getMessage(), "Validação", JOptionPane.ERROR_MESSAGE);
+        JPanel acoesForm = new JPanel(new GridLayout(1, 2, 4, 4));
+        acoesForm.add(btnAdicionar);
+        acoesForm.add(btnEditar);
+        form.add(acoesForm);
+
+        modeloParticipantes = new DefaultTableModel(new Object[]{"Código", "Nome", "Orçamento Disponível"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
             }
-        });
+        };
+        tabelaParticipantes = new JTable(modeloParticipantes);
+        tabelaParticipantes.getSelectionModel().addListSelectionListener(e -> preencherCamposParticipanteSelecionado());
 
-        btnRemover.addActionListener(e -> {
-            int linha = tabelaParticipantes.getSelectedRow();
-            if (linha == -1) {
-                JOptionPane.showMessageDialog(this, "Por favor, selecione um participante na tabela.");
-                return;
-            }
-            String codigo = (String) modeloTabelaParticipantes.getValueAt(linha, 0);
-            try {
-                planejamento.removerParticipante(codigo);
-                salvarDadosAutomaticamente();
-                atualizarTodasTabelas();
-                JOptionPane.showMessageDialog(this, "Participante removido com sucesso!");
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Não foi possível remover: " + ex.getMessage(), "Regra de Negócio", JOptionPane.ERROR_MESSAGE);
-            }
-        });
+        JPanel rodapeTabela = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        rodapeTabela.add(btnLimpar);
+        rodapeTabela.add(btnRemover);
+
+        btnAdicionar.addActionListener(e -> acaoAdicionarParticipante());
+        btnEditar.addActionListener(e -> acaoEditarParticipante());
+        btnRemover.addActionListener(e -> acaoRemoverParticipante());
+        btnLimpar.addActionListener(e -> limparCamposParticipante());
+
+        painel.add(form, BorderLayout.NORTH);
+        painel.add(new JScrollPane(tabelaParticipantes), BorderLayout.CENTER);
+        painel.add(rodapeTabela, BorderLayout.SOUTH);
 
         return painel;
     }
 
     private JPanel criarPainelDespesas() {
-        JPanel painel = new JPanel(new BorderLayout());
+        JPanel painel = new JPanel(new BorderLayout(8, 8));
+        painel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        modeloTabelaDespesas = new DefaultTableModel(new String[]{"Descrição da Despesa", "Tipo", "Valor (R$)", "Envolvidos"}, 0) {
+        JPanel topo = new JPanel(new BorderLayout(8, 8));
+
+        JPanel campos = new JPanel(new GridLayout(2, 2, 8, 8));
+        campos.setBorder(BorderFactory.createTitledBorder("Dados da Despesa"));
+
+        txtDescricao = new JTextField();
+        txtValor = new JTextField();
+
+        rbFixa = new JRadioButton("Despesa Fixa (rateio entre envolvidos)", true);
+        rbPorPessoa = new JRadioButton("Despesa Por Pessoa (valor por envolvido)");
+        ButtonGroup grupoTipo = new ButtonGroup();
+        grupoTipo.add(rbFixa);
+        grupoTipo.add(rbPorPessoa);
+
+        JPanel painelTipo = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        painelTipo.add(rbFixa);
+        painelTipo.add(rbPorPessoa);
+
+        campos.add(criarCampoRotulado("Descrição:", txtDescricao));
+        campos.add(criarCampoRotulado("Valor (R$):", txtValor));
+        campos.add(new JLabel("Tipo de Rateio:"));
+        campos.add(painelTipo);
+
+        painelCheckboxes = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        painelCheckboxes.setBorder(BorderFactory.createTitledBorder("Participantes Envolvidos"));
+
+        topo.add(campos, BorderLayout.NORTH);
+        topo.add(painelCheckboxes, BorderLayout.CENTER);
+
+        JPanel botoesDespesa = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnAdicionarDespesa = new JButton("Adicionar Despesa");
+        JButton btnAtualizarDespesa = new JButton("Atualizar Selecionada");
+        JButton btnRemoverDespesa = new JButton("Excluir Selecionada");
+        botoesDespesa.add(btnAdicionarDespesa);
+        botoesDespesa.add(btnAtualizarDespesa);
+        botoesDespesa.add(btnRemoverDespesa);
+        topo.add(botoesDespesa, BorderLayout.SOUTH);
+
+        modeloDespesas = new DefaultTableModel(
+                new Object[]{"#", "Descrição", "Tipo", "Valor Informado", "Envolvidos"}, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) { return false; }
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
-        tabelaDespesas = new JTable(modeloTabelaDespesas);
+        tabelaDespesas = new JTable(modeloDespesas);
+        tabelaDespesas.getSelectionModel().addListSelectionListener(e -> preencherCamposDespesaSelecionada());
+
+        btnAdicionarDespesa.addActionListener(e -> acaoAdicionarDespesa());
+        btnAtualizarDespesa.addActionListener(e -> acaoAtualizarDespesa());
+        btnRemoverDespesa.addActionListener(e -> acaoRemoverDespesa());
+
+        painel.add(topo, BorderLayout.NORTH);
         painel.add(new JScrollPane(tabelaDespesas), BorderLayout.CENTER);
-
-        JPanel painelBotoes = new JPanel();
-        JButton btnAdicionar = new JButton("Adicionar Despesa");
-        JButton btnRemover = new JButton("Remover Despesa");
-        painelBotoes.add(btnAdicionar);
-        painelBotoes.add(btnRemover);
-        painel.add(painelBotoes, BorderLayout.SOUTH);
-
-        btnAdicionar.addActionListener(e -> {
-            if (planejamento.getParticipantes().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Cadastre pelo menos um participante antes de lançar despesas.");
-                return;
-            }
-
-            String descricao = JOptionPane.showInputDialog(this, "Descrição da despesa:");
-            if (descricao == null || descricao.trim().isEmpty()) return;
-
-            String strValor = JOptionPane.showInputDialog(this, "Valor total ou unitário (R$):");
-            if (strValor == null) return;
-
-            String[] tipos = {"Fixa (Dividida igualmente)", "Por Pessoa (Custo unitário)"};
-            String tipoEscolhido = (String) JOptionPane.showInputDialog(this, "Selecione a forma de rateio:", "Tipo de Despesa", JOptionPane.QUESTION_MESSAGE, null, tipos, tipos[0]);
-            if (tipoEscolhido == null) return;
-
-            List<Participante> envolvidos = new ArrayList<>();
-            for (Participante p : planejamento.getParticipantes()) {
-                int resp = JOptionPane.showConfirmDialog(this, "Incluir " + p.getNome() + " nesta despesa?", "Seleção de Participantes", JOptionPane.YES_NO_OPTION);
-                if (resp == JOptionPane.YES_OPTION) {
-                    envolvidos.add(p);
-                }
-            }
-
-            if (envolvidos.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "A despesa precisa estar associada a pelo menos um participante.");
-                return;
-            }
-
-            try {
-                double valor = Double.parseDouble(strValor.replace(",", "."));
-                Despesa d;
-                if (tipoEscolhido.startsWith("Fixa")) {
-                    d = new DespesaFixa(descricao, valor, envolvidos);
-                } else {
-                    d = new DespesaPorPessoa(descricao, valor, envolvidos);
-                }
-
-                planejamento.adicionarDespesa(d);
-                salvarDadosAutomaticamente();
-                atualizarTodasTabelas();
-                JOptionPane.showMessageDialog(this, "Despesa registada com sucesso!");
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Erro ao registar despesa: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-
-        btnRemover.addActionListener(e -> {
-            int linha = tabelaDespesas.getSelectedRow();
-            if (linha == -1) {
-                JOptionPane.showMessageDialog(this, "Selecione uma despesa na tabela para remover.");
-                return;
-            }
-            Despesa d = planejamento.getDespesas().get(linha);
-            planejamento.removerDespesa(d);
-            salvarDadosAutomaticamente();
-            atualizarTodasTabelas();
-            JOptionPane.showMessageDialog(this, "Despesa removida com sucesso!");
-        });
 
         return painel;
     }
 
-    private JPanel criarPainelTotais() {
-        JPanel painel = new JPanel(new BorderLayout());
+    private JPanel criarPainelResumo() {
+        JPanel painel = new JPanel(new BorderLayout(8, 8));
+        painel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        modeloTabelaTotais = new DefaultTableModel(new String[]{"Participante", "Total a Pagar (R$)", "Orçamento (R$)", "Situação / Saldo"}, 0) {
+        modeloTotais = new DefaultTableModel(
+                new Object[]{"Código", "Participante", "Orçamento", "Total a Pagar", "Saldo / Diferença", "Situação"}, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) { return false; }
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
-        tabelaTotais = new JTable(modeloTabelaTotais);
+        tabelaTotais = new JTable(modeloTotais);
+
+        JPanel rodapeResumo = new JPanel(new BorderLayout());
+        lblCustoTotal = new JLabel("Custo Total do Planejamento: R$ 0,00", SwingConstants.LEFT);
+        lblCustoTotal.setBorder(BorderFactory.createEmptyBorder(6, 4, 6, 4));
+
+        JButton btnAtualizarResumo = new JButton("Recalcular / Atualizar");
+        btnAtualizarResumo.addActionListener(e -> atualizarTodasTabelas());
+
+        rodapeResumo.add(lblCustoTotal, BorderLayout.WEST);
+        rodapeResumo.add(btnAtualizarResumo, BorderLayout.EAST);
+
         painel.add(new JScrollPane(tabelaTotais), BorderLayout.CENTER);
+        painel.add(rodapeResumo, BorderLayout.SOUTH);
 
         return painel;
+    }
+
+    private JPanel criarBarraInferior() {
+        JPanel barra = new JPanel(new BorderLayout(8, 0));
+        barra.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
+
+        lblStatusArquivo = new JLabel("Arquivo: " + CAMINHO_ARQUIVO);
+        JButton btnSalvar = new JButton("Salvar Planejamento");
+        btnSalvar.addActionListener(e -> acaoSalvar());
+
+        barra.add(lblStatusArquivo, BorderLayout.WEST);
+        barra.add(btnSalvar, BorderLayout.EAST);
+        return barra;
+    }
+
+    private JPanel criarCampoRotulado(String rotulo, JTextField campo) {
+        JPanel p = new JPanel(new BorderLayout(4, 0));
+        p.add(new JLabel(rotulo), BorderLayout.NORTH);
+        p.add(campo, BorderLayout.CENTER);
+        return p;
+    }
+
+    private void carregarDadosIniciais() {
+        ResultadoCarga resultado = controller.carregarInicial();
+        lblStatusArquivo.setText(resultado.getMensagem());
+        if (!resultado.isSucesso()) {
+            JOptionPane.showMessageDialog(this, resultado.getMensagem(), "Aviso de Persistência", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private void acaoAdicionarParticipante() {
+        try {
+            controller.adicionarParticipante(txtCodigo.getText(), txtNome.getText(), txtOrcamento.getText());
+            limparCamposParticipante();
+            atualizarTodasTabelas();
+        } catch (IllegalArgumentException ex) {
+            exibirErro(ex.getMessage());
+        }
+    }
+
+    private void acaoEditarParticipante() {
+        int linha = tabelaParticipantes.getSelectedRow();
+        if (linha < 0) {
+            exibirErro("Selecione um participante na tabela para editar.");
+            return;
+        }
+        try {
+            int codigo = (int) modeloParticipantes.getValueAt(linha, 0);
+            controller.editarParticipante(codigo, txtNome.getText(), txtOrcamento.getText());
+            limparCamposParticipante();
+            atualizarTodasTabelas();
+        } catch (IllegalArgumentException ex) {
+            exibirErro(ex.getMessage());
+        }
+    }
+
+    private void acaoRemoverParticipante() {
+        int linha = tabelaParticipantes.getSelectedRow();
+        if (linha < 0) {
+            exibirErro("Selecione um participante na tabela para remover.");
+            return;
+        }
+        try {
+            int codigo = (int) modeloParticipantes.getValueAt(linha, 0);
+            if (controller.removerParticipantePorCodigo(codigo)) {
+                limparCamposParticipante();
+                atualizarTodasTabelas();
+            }
+        } catch (IllegalArgumentException ex) {
+            exibirErro(ex.getMessage());
+        }
+    }
+
+    private void preencherCamposParticipanteSelecionado() {
+        int linha = tabelaParticipantes.getSelectedRow();
+        if (linha >= 0) {
+            int codigo = (int) modeloParticipantes.getValueAt(linha, 0);
+            Participante p = controller.getPlanejamento().buscarParticipantePorCodigo(codigo);
+            if (p != null) {
+                txtCodigo.setText(String.valueOf(p.getCodigo()));
+                txtNome.setText(p.getNome());
+                txtOrcamento.setText(String.format(LOCALE_PT_BR, "%.2f", p.getOrcamento()));
+            }
+        }
+    }
+
+    private void limparCamposParticipante() {
+        txtCodigo.setText("");
+        txtNome.setText("");
+        txtOrcamento.setText("");
+        tabelaParticipantes.clearSelection();
+    }
+
+    private void acaoAdicionarDespesa() {
+        try {
+            List<Participante> envolvidos = obterParticipantesSelecionados();
+            controller.adicionarDespesa(txtDescricao.getText(), txtValor.getText(), rbFixa.isSelected(), envolvidos);
+            limparCamposDespesa();
+            atualizarTodasTabelas();
+        } catch (IllegalArgumentException ex) {
+            exibirErro(ex.getMessage());
+        }
+    }
+
+    private void acaoAtualizarDespesa() {
+        int linha = tabelaDespesas.getSelectedRow();
+        if (linha < 0) {
+            exibirErro("Selecione uma despesa na tabela para atualizar.");
+            return;
+        }
+        try {
+            List<Participante> envolvidos = obterParticipantesSelecionados();
+            controller.editarDespesa(linha, txtDescricao.getText(), txtValor.getText(), rbFixa.isSelected(), envolvidos);
+            limparCamposDespesa();
+            atualizarTodasTabelas();
+        } catch (IllegalArgumentException ex) {
+            exibirErro(ex.getMessage());
+        }
+    }
+
+    private void acaoRemoverDespesa() {
+        int linha = tabelaDespesas.getSelectedRow();
+        if (linha < 0) {
+            exibirErro("Selecione uma despesa na tabela para excluir.");
+            return;
+        }
+        if (controller.removerDespesa(linha)) {
+            limparCamposDespesa();
+            atualizarTodasTabelas();
+        }
+    }
+
+    private void preencherCamposDespesaSelecionada() {
+        int linha = tabelaDespesas.getSelectedRow();
+        List<Despesa> despesas = controller.getPlanejamento().getDespesas();
+        if (linha >= 0 && linha < despesas.size()) {
+            Despesa d = despesas.get(linha);
+            txtDescricao.setText(d.getDescricao());
+            txtValor.setText(String.format(LOCALE_PT_BR, "%.2f", d.getValorInformado()));
+            if ("Fixa".equalsIgnoreCase(d.getTipoDescricao())) {
+                rbFixa.setSelected(true);
+            } else {
+                rbPorPessoa.setSelected(true);
+            }
+            for (JCheckBox cb : checkBoxesParticipantes) {
+                Participante p = (Participante) cb.getClientProperty("participante");
+                cb.setSelected(p != null && d.envolve(p));
+            }
+        }
+    }
+
+    private void limparCamposDespesa() {
+        txtDescricao.setText("");
+        txtValor.setText("");
+        rbFixa.setSelected(true);
+        for (JCheckBox cb : checkBoxesParticipantes) {
+            cb.setSelected(false);
+        }
+        tabelaDespesas.clearSelection();
+    }
+
+    private List<Participante> obterParticipantesSelecionados() {
+        List<Participante> selecionados = new ArrayList<>();
+        for (JCheckBox cb : checkBoxesParticipantes) {
+            if (cb.isSelected()) {
+                Participante p = (Participante) cb.getClientProperty("participante");
+                if (p != null) {
+                    selecionados.add(p);
+                }
+            }
+        }
+        return selecionados;
+    }
+
+    private void acaoSalvar() {
+        try {
+            controller.salvar();
+            lblStatusArquivo.setText("Salvo com sucesso em " + CAMINHO_ARQUIVO + ".");
+            JOptionPane.showMessageDialog(this, "Planejamento salvo em " + CAMINHO_ARQUIVO + ".", "Salvar", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException ex) {
+            exibirErro("Erro ao salvar planejamento: " + ex.getMessage());
+        }
     }
 
     private void atualizarTodasTabelas() {
-        modeloTabelaParticipantes.setRowCount(0);
-        for (Participante p : planejamento.getParticipantes()) {
-            modeloTabelaParticipantes.addRow(new Object[]{p.getCodigo(), p.getNome(), p.getOrcamentoDisponivel()});
-        }
+        atualizarTabelaParticipantes();
+        atualizarCheckboxesEnvolvidos();
+        atualizarTabelaDespesas();
+        atualizarTabelaTotais();
+    }
 
-        modeloTabelaDespesas.setRowCount(0);
-        for (Despesa d : planejamento.getDespesas()) {
-            String tipo = (d instanceof DespesaFixa) ? "Fixa" : "Por Pessoa";
-            modeloTabelaDespesas.addRow(new Object[]{d.getDescricao(), tipo, d.getValorInformado(), d.getParticipantesEnvolvidos().size() + " part."});
-        }
-
-        modeloTabelaTotais.setRowCount(0);
-        for (Participante p : planejamento.getParticipantes()) {
-            double totalPagar = planejamento.calcularTotalIndividual(p);
-            double saldo = p.getOrcamentoDisponivel() - totalPagar;
-            String status = (saldo >= 0) ? "Dentro do orçamento (Saldo: R$ " + String.format("%.2f", saldo) + ")" : "Excedido em R$ " + String.format("%.2f", Math.abs(saldo));
-            modeloTabelaTotais.addRow(new Object[]{p.getNome(), totalPagar, p.getOrcamentoDisponivel(), status});
+    private void atualizarTabelaParticipantes() {
+        modeloParticipantes.setRowCount(0);
+        for (Participante p : controller.getPlanejamento().getParticipantes()) {
+            modeloParticipantes.addRow(new Object[]{
+                p.getCodigo(),
+                p.getNome(),
+                moedaBR.format(p.getOrcamento())
+            });
         }
     }
 
-    public static void main(String[] args) {
-        // Aplicação do Look and Feel Nimbus para conferir um aspeto moderno e polido à interface
-        try {
-            for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            // Caso o Nimbus não esteja disponível, recorre ao padrão do sistema
-            try {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception ignored) {}
+    private void atualizarCheckboxesEnvolvidos() {
+        List<Participante> marcadosAntes = obterParticipantesSelecionados();
+        painelCheckboxes.removeAll();
+        checkBoxesParticipantes.clear();
+
+        for (Participante p : controller.getPlanejamento().getParticipantes()) {
+            JCheckBox cb = new JCheckBox(p.getNome() + " (Cód. " + p.getCodigo() + ")");
+            cb.putClientProperty("participante", p);
+            cb.setSelected(marcadosAntes.contains(p));
+            checkBoxesParticipantes.add(cb);
+            painelCheckboxes.add(cb);
         }
 
+        painelCheckboxes.revalidate();
+        painelCheckboxes.repaint();
+    }
+
+    private void atualizarTabelaDespesas() {
+        modeloDespesas.setRowCount(0);
+        List<Despesa> despesas = controller.getPlanejamento().getDespesas();
+        for (int i = 0; i < despesas.size(); i++) {
+            Despesa d = despesas.get(i);
+            StringBuilder nomes = new StringBuilder();
+            List<Participante> envolvidos = d.getParticipantesEnvolvidos();
+            for (int j = 0; j < envolvidos.size(); j++) {
+                if (j > 0) nomes.append(", ");
+                nomes.append(envolvidos.get(j).getNome());
+            }
+            modeloDespesas.addRow(new Object[]{
+                i + 1,
+                d.getDescricao(),
+                d.getTipoDescricao(),
+                moedaBR.format(d.getValorInformado()),
+                nomes.toString()
+            });
+        }
+    }
+
+    private void atualizarTabelaTotais() {
+        modeloTotais.setRowCount(0);
+        for (Participante p : controller.getPlanejamento().getParticipantes()) {
+            double total = controller.getPlanejamento().calcularTotalIndividual(p);
+            double diferenca = Math.round((p.getOrcamento() - total) * 100.0) / 100.0;
+            String situacao;
+            if (diferenca < -0.005) {
+                situacao = "Excedido em " + moedaBR.format(Math.abs(diferenca));
+            } else {
+                situacao = "Dentro do orçamento";
+            }
+            modeloTotais.addRow(new Object[]{
+                p.getCodigo(),
+                p.getNome(),
+                moedaBR.format(p.getOrcamento()),
+                moedaBR.format(total),
+                moedaBR.format(diferenca),
+                situacao
+            });
+        }
+
+        double custoTotal = controller.getPlanejamento().calcularCustoTotal();
+        lblCustoTotal.setText("Custo Total do Planejamento: " + moedaBR.format(custoTotal));
+    }
+
+    private void exibirErro(String mensagem) {
+        JOptionPane.showMessageDialog(this, mensagem, "Atenção", JOptionPane.ERROR_MESSAGE);
+    }
+
+    public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            new TelaPrincipal().setVisible(true);
+            TelaPrincipal tela = new TelaPrincipal();
+            tela.setVisible(true);
         });
     }
 }

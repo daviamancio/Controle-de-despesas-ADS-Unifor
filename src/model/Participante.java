@@ -1,33 +1,30 @@
 package model;
 
 import java.io.Serializable;
+import java.util.Objects;
 
-/**
- * Representa um participante da atividade/passeio.
- * Implementa Serializable para permitir o armazenamento binário completo do estado.
- */
 public class Participante implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private String codigo;
+    private int codigo;
     private String nome;
-    private double orcamentoDisponivel;
+    private double orcamento;
 
-    public Participante(String codigo, String nome, double orcamentoDisponivel) {
+    public Participante(int codigo, String nome, double orcamento) {
         setCodigo(codigo);
         setNome(nome);
-        setOrcamentoDisponivel(orcamentoDisponivel);
+        setOrcamento(orcamento);
     }
 
-    public String getCodigo() {
+    public int getCodigo() {
         return codigo;
     }
 
-    public void setCodigo(String codigo) {
-        if (codigo == null || codigo.trim().isEmpty()) {
-            throw new IllegalArgumentException("O código do participante não pode ser vazio.");
+    public void setCodigo(int codigo) {
+        if (codigo <= 0) {
+            throw new IllegalArgumentException("O código do participante deve ser maior que zero.");
         }
-        this.codigo = codigo.trim();
+        this.codigo = codigo;
     }
 
     public String getNome() {
@@ -41,28 +38,32 @@ public class Participante implements Serializable {
         this.nome = nome.trim();
     }
 
-    public double getOrcamentoDisponivel() {
-        return orcamentoDisponivel;
+    public double getOrcamento() {
+        return orcamento;
     }
 
-    public void setOrcamentoDisponivel(double orcamentoDisponivel) {
-        // Regra de negócio do edital: orçamento deve ser maior ou igual a zero
-        if (orcamentoDisponivel < 0) {
+    public void setOrcamento(double orcamento) {
+        if (orcamento < 0 || Double.isNaN(orcamento) || Double.isInfinite(orcamento)) {
             throw new IllegalArgumentException("O orçamento disponível não pode ser negativo.");
         }
-        this.orcamentoDisponivel = orcamentoDisponivel;
+        this.orcamento = Math.round(orcamento * 100.0) / 100.0;
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
-        Participante that = (Participante) obj;
-        return codigo.equalsIgnoreCase(that.codigo);
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Participante)) return false;
+        Participante that = (Participante) o;
+        return codigo == that.codigo;
     }
 
     @Override
     public int hashCode() {
-        return codigo.toLowerCase().hashCode();
+        return Objects.hash(codigo);
+    }
+
+    @Override
+    public String toString() {
+        return codigo + " - " + nome;
     }
 }

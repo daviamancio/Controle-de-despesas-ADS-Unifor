@@ -1,13 +1,8 @@
 package model;
 
-import java.io.Serializable;
 import java.util.List;
 
-/**
- * Representa uma despesa com valor global fixo (ex: Transporte, Aluguel de espaço),
- * cujo montante total é dividido igualmente entre os participantes selecionados.
- */
-public class DespesaFixa extends Despesa implements Serializable {
+public class DespesaFixa extends Despesa {
     private static final long serialVersionUID = 1L;
 
     public DespesaFixa(String descricao, double valorInformado, List<Participante> participantesEnvolvidos) {
@@ -15,19 +10,27 @@ public class DespesaFixa extends Despesa implements Serializable {
     }
 
     @Override
+    public String getTipoDescricao() {
+        return "Fixa";
+    }
+
+    @Override
     public double calcularValorPara(Participante participante) {
-        // Se o participante não faz parte desta despesa, o custo para ele é zero
-        if (!getParticipantesEnvolvidos().contains(participante)) {
+        if (!envolve(participante)) {
             return 0.0;
         }
-        
-        int totalParticipantes = getParticipantesEnvolvidos().size();
-        if (totalParticipantes == 0) return 0.0;
+        List<Participante> envolvidos = getParticipantesEnvolvidos();
+        int qtd = envolvidos.size();
+        if (qtd == 0) {
+            return 0.0;
+        }
 
-        // Rateio igualitário do valor global entre os envolvidos
-        double valorDividido = getValorInformado() / totalParticipantes;
-        
-        // Arredondamento matemático rigoroso para duas casas decimais (centavos)
-        return Math.round(valorDividido * 100.0) / 100.0;
+        long totalCentavos = Math.round(getValorInformado() * 100.0);
+        long baseCentavos = totalCentavos / qtd;
+        long restoCentavos = totalCentavos % qtd;
+
+        int indice = envolvidos.indexOf(participante);
+        long centavosParticipante = baseCentavos + (indice < restoCentavos ? 1L : 0L);
+        return centavosParticipante / 100.0;
     }
 }

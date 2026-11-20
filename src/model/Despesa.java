@@ -1,12 +1,10 @@
 package model;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
-/**
- * Classe abstrata que serve de base para os diferentes tipos de despesa.
- * Aplica o conceito de polimorfismo, onde cada subclasse define sua própria regra de rateio.
- */
 public abstract class Despesa implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -35,28 +33,48 @@ public abstract class Despesa implements Serializable {
         return valorInformado;
     }
 
+    public double getValor() {
+        return valorInformado;
+    }
+
     public void setValorInformado(double valorInformado) {
-        // Regra do edital: despesa deve ser estritamente maior que zero
-        if (valorInformado <= 0) {
+        if (valorInformado <= 0 || Double.isNaN(valorInformado) || Double.isInfinite(valorInformado)) {
             throw new IllegalArgumentException("O valor da despesa deve ser maior que zero.");
         }
-        this.valorInformado = valorInformado;
+        this.valorInformado = Math.round(valorInformado * 100.0) / 100.0;
     }
 
     public List<Participante> getParticipantesEnvolvidos() {
-        return participantesEnvolvidos;
+        return Collections.unmodifiableList(participantesEnvolvidos);
     }
 
-    public void setParticipantesEnvolvidos(List<Participante> participantesEnvolvidos) {
-        if (participantesEnvolvidos == null || participantesEnvolvidos.isEmpty()) {
-            throw new IllegalArgumentException("A despesa deve estar vinculada a pelo menos um participante.");
+    public void setParticipantesEnvolvidos(List<Participante> participantes) {
+        if (participantes == null || participantes.isEmpty()) {
+            throw new IllegalArgumentException("A despesa deve envolver ao menos um participante.");
         }
-        this.participantesEnvolvidos = participantesEnvolvidos;
+        List<Participante> copia = new ArrayList<>();
+        for (Participante p : participantes) {
+            if (p == null) {
+                throw new IllegalArgumentException("Participante inválido na lista da despesa.");
+            }
+            if (!copia.contains(p)) {
+                copia.add(p);
+            }
+        }
+        if (copia.isEmpty()) {
+            throw new IllegalArgumentException("A despesa deve envolver ao menos um participante.");
+        }
+        this.participantesEnvolvidos = copia;
     }
 
-    /**
-     * Método abstrato polimórfico. Cada tipo de despesa implementa 
-     * a sua própria lógica de cálculo individual para um dado participante.
-     */
+    public boolean envolve(Participante participante) {
+        if (participante == null) {
+            return false;
+        }
+        return participantesEnvolvidos.contains(participante);
+    }
+
+    public abstract String getTipoDescricao();
+
     public abstract double calcularValorPara(Participante participante);
 }

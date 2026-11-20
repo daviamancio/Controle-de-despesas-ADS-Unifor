@@ -1,31 +1,39 @@
 package persistence;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import model.Planejamento;
 
-import java.io.*;
+public class GerenciadorArquivo implements PersistenciaPlanejamento {
 
-/**
- * Classe responsável pela camada de persistência local em ficheiro binário.
- * Utiliza o mecanismo nativo de serialização de objetos do Java.
- */
-public class GerenciadorArquivo {
-
-    /**
-     * Serializa e grava o objeto Planejamento completo em um arquivo binário local.
-     */
-    public static void salvar(String caminhoArquivo, Planejamento planejamento) throws IOException {
+    @Override
+    public void salvar(String caminhoArquivo, Planejamento planejamento) throws IOException {
+        if (caminhoArquivo == null || caminhoArquivo.trim().isEmpty()) {
+            throw new IOException("Caminho de arquivo inválido.");
+        }
+        if (planejamento == null) {
+            throw new IOException("Planejamento nulo não pode ser salvo.");
+        }
         try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(caminhoArquivo))) {
             oos.writeObject(planejamento);
+            oos.flush();
         }
     }
 
-    /**
-     * Lê e desserializa o objeto Planejamento a partir de um arquivo binário local,
-     * recuperando todo o estado anterior (participantes, despesas e vínculos).
-     */
-    public static Planejamento carregar(String caminhoArquivo) throws IOException, ClassNotFoundException {
+    @Override
+    public Planejamento carregar(String caminhoArquivo) throws IOException, ClassNotFoundException {
+        if (caminhoArquivo == null || caminhoArquivo.trim().isEmpty()) {
+            throw new IOException("Caminho de arquivo inválido.");
+        }
         try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(caminhoArquivo))) {
-            return (Planejamento) ois.readObject();
+            Object obj = ois.readObject();
+            if (!(obj instanceof Planejamento)) {
+                throw new IOException("O arquivo não contém um objeto Planejamento válido.");
+            }
+            return (Planejamento) obj;
         }
     }
 }
